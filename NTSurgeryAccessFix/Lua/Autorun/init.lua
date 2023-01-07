@@ -1,9 +1,9 @@
 
 Version = "1.0.0"
 
--- Version and expansion display
+-- Print a nice version header
 Timer.Wait(function() Timer.Wait(function()
-    local runstring = "\n/// Running NT Surgery Access Fix V "..MT.Version.." ///\n"
+    local runstring = "\n/// Running NT Surgery Access Fix V "..Version.." ///\n"
 
     local linelength = string.len(runstring)+4
     local i = 0
@@ -12,22 +12,46 @@ Timer.Wait(function() Timer.Wait(function()
     print(runstring)
 end,1) end,1)
 
--- jobid:surgeon
---id_medicaldoctor or jobid:medicaldoctor or id_medic
+-- Patch the ID card to add the medical tags to the surgeon job
+-- Also send a networking event to update the clients
+function upgradeIDCard (instance, ptable)
+    item = instance.item
+    if item.HasTag("jobid:surgeon") then
+        updated = false
 
-Hook.Patch("Barotrauma.RelatedItem", "Load", function(instance, ptable)
-    ids = ptable.ReturnValue.JoinedIdentifiers
-    if string.find(ids, "id_medic") or string.find(ids, "jobid:medicaldoctor") or string.find(ids, "id_medicaldoctor") then
-        changed = false
-        if not string.find(ids, "jobid:surgeon") then
-            changed = true
-            ids = ids .. ", jobid:surgeon"
+        if not item.HasTag("jobid:medicaldoctor") then
+            item.Tags = "jobid:medicaldoctor," .. item.Tags 
+            updated = true
         end
 
-        if changed then
-            ptable.ReturnValue.JoinedIdentifiers = ids
+        -- Add common medical tags
+        if not item.HasTag("id_medic") then
+            item.AddTag("id_medic")
+            updated = true
+        end
+
+        if not item.HasTag("id_medical") then
+            item.AddTag("id_medical")
+            updated = true
+        end
+
+        if not item.HasTag("id_medicaldoctor") then
+            item.AddTag("id_medicaldoctor")
+            updated = true
+        end
+
+        if updated then
+
+            -- Only server needs to update clients
+            if SERVER then 
+                Networking.CreateEntityEvent(item, Item.ChangePropertyEventData(item.SerializableProperties[Identifier("Tags")], item))
+            end
         end
     end
-end, Hook.HookMethodType.After)
+end
+
+-- Patch the ID card to add the medical tags to the surgeon job
+Hook.Patch("Barotrauma.Items.Components.IdCard", "OnItemLoaded", upgradeIDCard, Hook.HookMethodType.After)
+Hook.Patch("Barotrauma.Items.Components.IdCard", "Initialize", upgradeIDCard, Hook.HookMethodType.After)
 
 
